@@ -1,0 +1,34 @@
+---
+- name: Install K3s on Control Node
+  hosts: controlnode
+  become: yes
+  tasks:
+    - name: Install K3s server
+      shell: curl -sfL https://get.k3s.io | sh -
+
+    - name: Get K3s token
+      shell: cat /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+
+    - name: Get Control Node IP
+      shell: hostname -I | awk '{print $1}'
+      register: control_ip
+
+    - name: Save K3s join command
+      local_action:
+        module: copy
+        content: "curl -sfL https://get.k3s.io | K3S_URL=https://{{ control_ip.stdout }}:6443 K3S_TOKEN={{ k3s_token.stdout }} sh -"
+        dest: "./ansible/join_command.sh"
+
+- name: Install K3s on Worker Nodes
+  hosts: workernodes
+  become: yes
+  tasks:
+    - name: Copy join script to worker
+      copy:
+        src: ./ansible/join_command.sh
+        dest: /tmp/join.sh
+        mode: '0755'
+
+    - name: Join worker to K3s cluster
+      shell: bash /tmp/join.sh
